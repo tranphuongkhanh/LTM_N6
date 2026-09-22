@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OTT v2 — Búa Kéo Bao</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;0,700;1,500&family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Hidden SVG symbol defs: reused by every piece / legend icon -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs>
+  <symbol id="icon-bua" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M12 3c-3.1 0-5.7 2.2-6.3 5.1-2 1-3.1 3-2.8 5.1.4 2.2 2.2 3.9 4.5 4.2.7 1.8 2.5 3.1 4.6 3.1s3.9-1.3 4.6-3.1c2.3-.3 4.1-2 4.5-4.2.3-2.1-.8-4.1-2.8-5.1C17.7 5.2 15.1 3 12 3Z"/>
+  </symbol>
+  <symbol id="icon-keo" viewBox="0 0 24 24">
+    <circle cx="6.2" cy="6" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/>
+    <circle cx="6.2" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.9"/>
+    <path d="M8.3 7.6 20 19.2M8.3 16.4 20 4.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="icon-bao" viewBox="0 0 24 24">
+    <path fill="currentColor" d="M6 3h8l5 5v12a1.2 1.2 0 0 1-1.2 1.2H6A1.2 1.2 0 0 1 4.8 20V4.2A1.2 1.2 0 0 1 6 3Z"/>
+    <path d="M14 3v4.6a.6.6 0 0 0 .6.6H19" fill="none" stroke="var(--panel)" stroke-width="1.3"/>
+  </symbol>
+</defs>
+</svg>
+
+<div class="app">
+
+  <header class="topbar">
+    <h1>OTT<span class="sub">Đấm lá kéo · bàn cờ 9×9</span></h1>
+    <div class="turn-indicator">
+      <span class="turn-dot p1" id="turnDot"></span>
+      <span>Đang đi: <strong id="turnLabel">Đỏ</strong></span>
+    </div>
+  </header>
+
+  <div class="layout">
+
+    <section class="board-wrap">
+      <div class="board-frame">
+        <div class="row-labels" id="rowLabels"></div>
+        <div class="col-labels" id="colLabels"></div>
+        <div class="board" id="board"></div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="card">
+        <h2>Quân còn lại</h2>
+        <div id="scoreboard"></div>
+      </div>
+
+      <div class="card controls">
+        <button class="primary" id="btnRules">Luật chơi</button>
+        <button id="btnUndo">Hoàn tác nước đi</button>
+        <button id="btnNew">Ván mới</button>
+      </div>
+
+      <div class="card">
+        <h2>Nhật ký nước đi</h2>
+        <div class="log" id="log"></div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<!-- Rules modal -->
+<div class="modal-overlay" id="rulesOverlay">
+  <div class="modal">
+    <h2>Luật chơi OTT v2</h2>
+    <p><b>Bàn cờ:</b> lưới 9×9, cột a–i (trái→phải), hàng 1–9 (dưới→trên).</p>
+    <p><b>Di chuyển:</b> mỗi quân đi 1 ô theo 8 hướng, giống quân Vua trong cờ vua.</p>
+    <p><b>Ăn quân (đấm lá kéo):</b></p>
+    <ul>
+      <li>Búa thắng Kéo</li>
+      <li>Kéo thắng Bao</li>
+      <li>Bao thắng Búa</li>
+    </ul>
+    <p>Hai quân <b>cùng loại</b> không ăn được nhau — chỉ đứng chặn đường, không thể đi vào ô đó. Quân khắc mình thì không thể đi vào ô đó (vì sẽ thua nếu ăn).</p>
+    <p><b>Điều kiện thắng</b> — thắng ngay khi:</p>
+    <ul>
+      <li>Ăn sạch hoàn toàn 1 loại quân bất kỳ của đối phương, hoặc</li>
+      <li>Đưa được quân của mình vào ô <b>a1</b> hoặc <b>i9</b> (ô có viền chấm gạch trên bàn).</li>
+    </ul>
+    <div class="legend">
+      <span><svg><use href="#icon-bua"/></svg>Búa</span>
+      <span><svg><use href="#icon-keo"/></svg>Kéo</span>
+      <span><svg><use href="#icon-bao"/></svg>Bao</span>
+    </div>
+    <div class="controls" style="margin-top:16px;">
+      <button class="primary" id="closeRules">Đã hiểu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Win modal -->
+<div class="modal-overlay" id="winOverlay">
+  <div class="modal win-modal">
+    <div class="win-icon" id="winIcon">🏆</div>
+    <h2 id="winTitle">Đỏ thắng!</h2>
+    <p id="winDesc"></p>
+    <div class="controls" style="margin-top:10px;">
+      <button class="primary" id="btnPlayAgain">Chơi ván mới</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
