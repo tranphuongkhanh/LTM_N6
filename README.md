@@ -1,0 +1,7 @@
+# 1. Tạo 1 trang web để 2 người chơi Oẳn tù tì v2 (OTTv2)
+
+# 2. Dùng thư viện playfull.html để cho phép có server, nhiều người chơi cùng lúc.
+
+Luật chơi OTTv2 cho đấm lá kéo là các quân trên bàn cờ 9x9 mỗi quân cờ được di chuyển 1 ô theo mọi hướng 8 hướng giống như quân vua trong cờ vua.
+
+Cách ăn quân áp dụng đúng luật hai quân cùng loại thì không thể ăn nhau mà chỉ đứng chặn đường nhau. điều kiện thắng bên nào ăn hết sạch hoàn toàn 1 loại quân của đối phương hoặc đưa quân vào ô a1/ i9 thì thắng 
