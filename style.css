@@ -289,6 +289,30 @@ body{
 .score-chip.zero{opacity:.35;text-decoration:line-through;}
 
 .controls{display:flex;flex-direction:column;gap:8px;}
+.room-actions{display:flex;flex-direction:column;gap:8px;}
+.room-join{display:flex;gap:8px;}
+.room-join input{
+  min-width:0;
+  flex:1;
+  font:inherit;
+  font-size:13px;
+  padding:9px 10px;
+  border:1px solid var(--brass-dim);
+  border-radius:8px;
+  background:var(--panel-2);
+  color:var(--ivory);
+}
+.room-join input::placeholder{color:var(--muted);}
+.room-id,.room-role,.connection-status{
+  margin:10px 0 0;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.45;
+  overflow-wrap:anywhere;
+}
+.room-role{color:var(--ivory);font-weight:600;}
+.connection-status[data-state="ready"]{color:var(--ok);}
+.connection-status[data-state="error"]{color:var(--danger);}
 button{
   font-family:'Be Vietnam Pro', sans-serif;
   font-weight:600;
