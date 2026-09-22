@@ -98,6 +98,44 @@ body{
   letter-spacing:2px;
   margin-top:2px;
 }
+.topbar-right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.room-bar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:13px;
+  color:var(--muted);
+  background:var(--panel);
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--brass-dim);
+}
+.room-bar .room-code strong{color:var(--brass);letter-spacing:1px;}
+button.tiny{
+  padding:4px 10px;
+  font-size:12px;
+  border-radius:999px;
+}
+.seat-badge{
+  font-size:13px;
+  padding:6px 12px;
+  border-radius:999px;
+  border:1px solid var(--brass-dim);
+  background:var(--panel);
+  color:var(--muted);
+}
+.seat-badge.me-p1{color:var(--p1);border-color:var(--p1);}
+.seat-badge.me-p2{color:var(--p2);border-color:var(--p2);}
+.seat-badge.spectator{opacity:.7;}
+.board.locked{
+  opacity:.55;
+  pointer-events:none;
+}
 .turn-indicator{
   display:flex;
   align-items:center;

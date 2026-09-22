@@ -1,5 +1,4 @@
-(function(){
-"use strict";
+import { playhtml } from "https://unpkg.com/playhtml";
 
 /* ============================================================
    MODULE: CONFIG & CONSTANTS
@@ -9,92 +8,110 @@ const TYPES = ['bua','keo','bao'];
 const TYPE_LABEL = {bua:'Búa', keo:'Kéo', bao:'Bao'};
 const BEATS = {bua:'keo', keo:'bao', bao:'bua'}; // key beats value
 const PLAYER_LABEL = {1:'Đỏ', 2:'Xanh'};
-// goal cells in internal [row][col] grid coords, computed once board geometry is defined below
-let GOALS = []; // filled in initBoard()
+const GOALS = [{r:8,c:0,label:'a1'}, {r:0,c:8,label:'i9'}]; // fixed board geometry
 
 /* ============================================================
-   MODULE: GAME STATE
+   MODULE: ROOM / URL HANDLING
+   ------------------------------------------------------------
+   The room code lives in the URL (?room=XXXXXX). Two browsers
+   pointed at the same URL automatically share the same playhtml
+   room, so all we need is to generate a code if one isn't
+   present yet and put it back in the address bar so it can be
+   shared/bookmarked.
    ============================================================ */
-let board = [];              // board[row][col] = {type, player} | null
-let currentPlayer = 1;
-let selected = null;          // {r,c}
-let legalMoves = [];          // [{r,c,type:'move'|'capture'}]
-let counts = {1:{bua:6,keo:6,bao:6}, 2:{bua:6,keo:6,bao:6}};
-let gameOver = false;
-let history = [];             // stack of snapshots for undo
-let moveLog = [];
+function getOrCreateRoomCode(){
+  const params = new URLSearchParams(location.search);
+  let code = params.get('room');
+  if(!code){
+    code = Math.random().toString(36).slice(2,8).toUpperCase();
+    params.set('room', code);
+    history.replaceState(null, '', location.pathname + '?' + params.toString());
+  }
+  return code;
+}
+const ROOM_CODE = getOrCreateRoomCode();
 
 /* ============================================================
-   MODULE: BOARD INITIALIZATION
+   MODULE: GAME STATE (SHARED / SYNCED)
+   ------------------------------------------------------------
+   `shared` is the single source of truth and lives in a
+   playhtml page-data channel, so every tab in the same room
+   sees the exact same object. Local-only UI state (which cell
+   is selected, which legal moves are highlighted) stays local
+   because it's different per-viewer.
    ============================================================ */
-function rowLabelOf(rowIndex){ return SIZE - rowIndex; }        // rowIndex 0 -> "9" ... 8 -> "1"
-function colLabelOf(colIndex){ return String.fromCharCode(97 + colIndex); } // 0 -> 'a'
-
-function initBoard(){
-  board = Array.from({length:SIZE}, () => Array(SIZE).fill(null));
-
-  // row1 = index 8, row2 = index 7 (player 1 / Đỏ, bottom)
-  // row9 = index 0, row8 = index 1 (player 2 / Xanh, top)
+function freshBoard(){
+  const b = Array.from({length:SIZE}, () => Array(SIZE).fill(null));
   const cycleA = ['bua','keo','bao'];
   const cycleB = ['keo','bao','bua'];
-
   for(let c=0;c<SIZE;c++){
-    board[8][c] = {type: cycleA[c % 3], player: 1};
-    board[7][c] = {type: cycleB[c % 3], player: 1};
-    board[0][c] = {type: cycleA[c % 3], player: 2};
-    board[1][c] = {type: cycleB[c % 3], player: 2};
+    b[8][c] = {type: cycleA[c % 3], player: 1};
+    b[7][c] = {type: cycleB[c % 3], player: 1};
+    b[0][c] = {type: cycleA[c % 3], player: 2};
+    b[1][c] = {type: cycleB[c % 3], player: 2};
   }
-
-  // a1 -> col 0, row1(=index 8) ; i9 -> col 8, row9(=index 0)
-  GOALS = [{r:8,c:0,label:'a1'}, {r:0,c:8,label:'i9'}];
-
-  counts = {1:{bua:6,keo:6,bao:6}, 2:{bua:6,keo:6,bao:6}};
-  currentPlayer = 1;
-  selected = null;
-  legalMoves = [];
-  gameOver = false;
-  history = [];
-  moveLog = [];
+  return b;
 }
+
+function freshState(keepSeats){
+  return {
+    board: freshBoard(),
+    counts: {1:{bua:6,keo:6,bao:6}, 2:{bua:6,keo:6,bao:6}},
+    currentPlayer: 1,
+    moveLog: [],
+    gameOver: false,
+    winner: null,
+    prevSnapshot: null,          // single-level undo, shared so both sides agree
+    seats: keepSeats || {1:null, 2:null} // publicKey of whoever claimed each color
+  };
+}
+
+let shared = freshState();   // mirrors the synced channel
+let mySeat = null;           // 1, 2, or null (spectator / not seated yet)
+let myKey = null;
+let selected = null;         // {r,c} — local-only UI state
+let legalMoves = [];         // local-only UI state
+
+playhtml.init({ room: `ott-${ROOM_CODE}` });
+const channel = playhtml.createPageData('state', freshState());
+
+/* ============================================================
+   MODULE: BOARD GEOMETRY HELPERS
+   ============================================================ */
+function rowLabelOf(rowIndex){ return SIZE - rowIndex; }
+function colLabelOf(colIndex){ return String.fromCharCode(97 + colIndex); }
+function inBounds(r,c){ return r>=0 && r<SIZE && c>=0 && c<SIZE; }
+function isGoalCell(r,c){ return GOALS.some(g => g.r===r && g.c===c); }
 
 /* ============================================================
    MODULE: MOVE VALIDATION & RPS CAPTURE LOGIC
+   (pure functions — take state in, return results, never mutate)
    ============================================================ */
-function inBounds(r,c){ return r>=0 && r<SIZE && c>=0 && c<SIZE; }
-
-// Returns 'move' | 'capture' | null(blocked/illegal) for attacker moving onto target cell
-function moveOutcome(attackerType, targetCell){
+function moveOutcome(attackerType, targetCell, forPlayer){
   if(targetCell === null) return 'move';
-  if(targetCell.player === currentPlayer) return null;      // own piece: blocked
-  if(targetCell.type === attackerType) return null;          // same type: blocked, only stands in the way
-  if(BEATS[attackerType] === targetCell.type) return 'capture'; // attacker beats defender
-  return null; // defender beats attacker: illegal to move there
+  if(targetCell.player === forPlayer) return null;
+  if(targetCell.type === attackerType) return null;
+  if(BEATS[attackerType] === targetCell.type) return 'capture';
+  return null;
 }
 
-function computeLegalMoves(r,c){
+function computeLegalMoves(board, r, c, forPlayer){
   const piece = board[r][c];
-  if(!piece || piece.player !== currentPlayer) return [];
+  if(!piece || piece.player !== forPlayer) return [];
   const out = [];
   for(let dr=-1; dr<=1; dr++){
     for(let dc=-1; dc<=1; dc++){
       if(dr===0 && dc===0) continue;
       const nr=r+dr, nc=c+dc;
       if(!inBounds(nr,nc)) continue;
-      const result = moveOutcome(piece.type, board[nr][nc]);
+      const result = moveOutcome(piece.type, board[nr][nc], forPlayer);
       if(result) out.push({r:nr, c:nc, type:result});
     }
   }
   return out;
 }
 
-/* ============================================================
-   MODULE: WIN CONDITIONS
-   ============================================================ */
-function isGoalCell(r,c){
-  return GOALS.some(g => g.r===r && g.c===c);
-}
-
-function checkWin(mover, toR, toC, capturedPiece){
+function checkWin(mover, toR, toC, capturedPiece, counts){
   if(isGoalCell(toR,toC)){
     const g = GOALS.find(g => g.r===toR && g.c===toC);
     return {winner:mover, reason:'goal', detail:g.label};
@@ -109,75 +126,115 @@ function checkWin(mover, toR, toC, capturedPiece){
 }
 
 /* ============================================================
-   MODULE: GAME CONTROL (move execution / undo / reset)
+   MODULE: GAME CONTROL (writes go through the shared channel)
    ============================================================ */
-function snapshot(){
-  return {
-    board: JSON.parse(JSON.stringify(board)),
-    counts: JSON.parse(JSON.stringify(counts)),
-    currentPlayer,
-    moveLog: moveLog.slice(),
-    gameOver
-  };
-}
-function restore(snap){
-  board = snap.board;
-  counts = snap.counts;
-  currentPlayer = snap.currentPlayer;
-  moveLog = snap.moveLog;
-  gameOver = snap.gameOver;
-  selected = null;
-  legalMoves = [];
-}
-
 function performMove(from, to, moveType){
-  history.push(snapshot());
+  if(mySeat === null || shared.gameOver) return;
+  if(shared.currentPlayer !== mySeat) return; // not your turn
 
-  const piece = board[from.r][from.c];
-  const capturedPiece = board[to.r][to.c];
+  channel.setData(draft => {
+    const piece = draft.board[from.r][from.c];
+    const capturedPiece = draft.board[to.r][to.c];
 
-  board[to.r][to.c] = piece;
-  board[from.r][from.c] = null;
+    // keep a single-level undo snapshot of the pre-move state
+    draft.prevSnapshot = {
+      board: JSON.parse(JSON.stringify(draft.board)),
+      counts: JSON.parse(JSON.stringify(draft.counts)),
+      currentPlayer: draft.currentPlayer,
+      moveLog: draft.moveLog.slice(),
+      gameOver: draft.gameOver,
+      winner: draft.winner,
+      mover: draft.currentPlayer
+    };
 
-  if(moveType === 'capture' && capturedPiece){
-    counts[capturedPiece.player][capturedPiece.type]--;
-  }
+    draft.board[to.r][to.c] = piece;
+    draft.board[from.r][from.c] = null;
 
-  const fromLabel = colLabelOf(from.c) + rowLabelOf(from.r);
-  const toLabel = colLabelOf(to.c) + rowLabelOf(to.r);
-  let entry = `${PLAYER_LABEL[currentPlayer]}: ${TYPE_LABEL[piece.type]} ${fromLabel}→${toLabel}`;
-  if(moveType==='capture') entry += ` (ăn ${TYPE_LABEL[capturedPiece.type]})`;
-  moveLog.push(entry);
+    if(moveType === 'capture' && capturedPiece){
+      draft.counts[capturedPiece.player][capturedPiece.type]--;
+    }
 
-  const result = checkWin(currentPlayer, to.r, to.c, moveType==='capture' ? capturedPiece : null);
+    const fromLabel = colLabelOf(from.c) + rowLabelOf(from.r);
+    const toLabel = colLabelOf(to.c) + rowLabelOf(to.r);
+    let entry = `${PLAYER_LABEL[draft.currentPlayer]}: ${TYPE_LABEL[piece.type]} ${fromLabel}→${toLabel}`;
+    if(moveType==='capture') entry += ` (ăn ${TYPE_LABEL[capturedPiece.type]})`;
+    draft.moveLog.push(entry);
+
+    const result = checkWin(draft.currentPlayer, to.r, to.c, moveType==='capture' ? capturedPiece : null, draft.counts);
+    if(result){
+      draft.gameOver = true;
+      draft.winner = result;
+    } else {
+      draft.currentPlayer = draft.currentPlayer === 1 ? 2 : 1;
+    }
+  });
 
   selected = null;
   legalMoves = [];
-
-  if(result){
-    gameOver = true;
-    render();
-    showWin(result);
-    return;
-  }
-
-  currentPlayer = currentPlayer === 1 ? 2 : 1;
-  render();
 }
 
 function undo(){
-  if(history.length === 0) return;
-  const snap = history.pop();
-  restore(snap);
+  if(!shared.prevSnapshot) return;
+  // only the player who made the last move (or either seat, once the game
+  // ended) can take it back — keeps both sides in agreement.
+  if(mySeat === null) return;
+
+  channel.setData(draft => {
+    const snap = draft.prevSnapshot;
+    if(!snap) return;
+    draft.board = snap.board;
+    draft.counts = snap.counts;
+    draft.currentPlayer = snap.currentPlayer;
+    draft.moveLog = snap.moveLog;
+    draft.gameOver = snap.gameOver;
+    draft.winner = snap.winner;
+    draft.prevSnapshot = null;
+  });
+  selected = null;
+  legalMoves = [];
   hideWin();
-  render();
 }
 
 function newGame(){
-  initBoard();
+  channel.setData(draft => {
+    const fresh = freshState({1: draft.seats[1], 2: draft.seats[2]});
+    draft.board = fresh.board;
+    draft.counts = fresh.counts;
+    draft.currentPlayer = fresh.currentPlayer;
+    draft.moveLog = fresh.moveLog;
+    draft.gameOver = fresh.gameOver;
+    draft.winner = fresh.winner;
+    draft.prevSnapshot = fresh.prevSnapshot;
+    // seats untouched — same two players keep playing
+  });
+  selected = null;
+  legalMoves = [];
   hideWin();
   hideRules();
-  render();
+}
+
+/* ============================================================
+   MODULE: SEATING
+   ------------------------------------------------------------
+   First visitor to a room claims Đỏ (1), second claims Xanh (2),
+   everyone after that is a spectator. Seats persist across
+   reloads because playhtml keeps a stable identity per browser.
+   ============================================================ */
+function claimSeatIfNeeded(){
+  if(!myKey) return;
+  if(shared.seats[1] === myKey || shared.seats[2] === myKey) return;
+  if(!shared.seats[1]){
+    channel.setData(draft => { draft.seats[1] = myKey; });
+  } else if(!shared.seats[2]){
+    channel.setData(draft => { draft.seats[2] = myKey; });
+  }
+}
+
+function computeMySeat(){
+  if(!myKey) return null;
+  if(shared.seats[1] === myKey) return 1;
+  if(shared.seats[2] === myKey) return 2;
+  return null;
 }
 
 /* ============================================================
@@ -191,6 +248,11 @@ const logEl = document.getElementById('log');
 const turnDot = document.getElementById('turnDot');
 const turnLabel = document.getElementById('turnLabel');
 const btnUndo = document.getElementById('btnUndo');
+const roomCodeLabel = document.getElementById('roomCodeLabel');
+const seatBadge = document.getElementById('seatBadge');
+const waitingOverlay = document.getElementById('waitingOverlay');
+const waitingTitle = document.getElementById('waitingTitle');
+const waitingDesc = document.getElementById('waitingDesc');
 
 function buildLabels(){
   rowLabelsEl.innerHTML = '';
@@ -212,8 +274,35 @@ function pieceIconSVG(type){
 }
 
 function render(){
+  const board = shared.board;
+  const counts = shared.counts;
+  const currentPlayer = shared.currentPlayer;
+  const gameOver = shared.gameOver;
+  const myTurn = mySeat !== null && mySeat === currentPlayer && !gameOver;
+
+  roomCodeLabel.textContent = ROOM_CODE;
+
+  seatBadge.className = 'seat-badge';
+  if(mySeat === null){
+    seatBadge.textContent = shared.seats[1] && shared.seats[2] ? 'Bạn là: Người xem' : 'Đang kết nối…';
+    seatBadge.classList.add('spectator');
+  } else {
+    seatBadge.textContent = `Bạn là: ${PLAYER_LABEL[mySeat]}`;
+    seatBadge.classList.add(mySeat === 1 ? 'me-p1' : 'me-p2');
+  }
+
+  // waiting-for-opponent overlay
+  if(mySeat !== null && !shared.seats[2]){
+    waitingTitle.textContent = 'Đang chờ đối thủ…';
+    waitingDesc.textContent = 'Gửi link phòng cho bạn bè để họ vào chơi cùng.';
+    waitingOverlay.classList.add('open');
+  } else {
+    waitingOverlay.classList.remove('open');
+  }
+
   // board cells
   boardEl.innerHTML = '';
+  boardEl.classList.toggle('locked', !myTurn);
   for(let r=0;r<SIZE;r++){
     for(let c=0;c<SIZE;c++){
       const cell = document.createElement('div');
@@ -228,7 +317,7 @@ function render(){
         pd.className = 'piece p' + piece.player;
         pd.innerHTML = pieceIconSVG(piece.type);
         cell.appendChild(pd);
-        if(!gameOver && piece.player === currentPlayer){
+        if(myTurn && piece.player === currentPlayer){
           cell.classList.add('own-piece');
         }
       }
@@ -273,44 +362,49 @@ function render(){
 
   // log
   logEl.innerHTML = '';
-  moveLog.slice(-40).forEach(entry => {
+  shared.moveLog.slice(-40).forEach(entry => {
     const d = document.createElement('div');
     d.innerHTML = entry;
     logEl.appendChild(d);
   });
 
-  btnUndo.disabled = history.length === 0;
+  btnUndo.disabled = !shared.prevSnapshot || mySeat === null;
+
+  if(gameOver && shared.winner){
+    showWin(shared.winner);
+  } else {
+    hideWin();
+  }
 }
 
 /* ============================================================
    MODULE: EVENT HANDLERS
    ============================================================ */
 function onCellClick(e){
-  if(gameOver) return;
+  if(shared.gameOver) return;
+  if(mySeat === null || mySeat !== shared.currentPlayer) return; // spectator or not your turn
+
   const r = parseInt(e.currentTarget.dataset.r,10);
   const c = parseInt(e.currentTarget.dataset.c,10);
-  const piece = board[r][c];
+  const piece = shared.board[r][c];
 
-  // clicking a legal destination
   const dest = legalMoves.find(m => m.r===r && m.c===c);
   if(selected && dest){
     performMove(selected, {r,c}, dest.type);
     return;
   }
 
-  // clicking own piece: select / reselect
-  if(piece && piece.player === currentPlayer){
+  if(piece && piece.player === shared.currentPlayer){
     if(selected && selected.r===r && selected.c===c){
       selected = null; legalMoves = [];
     } else {
       selected = {r,c};
-      legalMoves = computeLegalMoves(r,c);
+      legalMoves = computeLegalMoves(shared.board, r, c, shared.currentPlayer);
     }
     render();
     return;
   }
 
-  // clicking anything else: deselect
   selected = null; legalMoves = [];
   render();
 }
@@ -333,6 +427,18 @@ function showWin(result){
 }
 function hideWin(){ winOverlay.classList.remove('open'); }
 
+function shareLink(){
+  return location.href;
+}
+async function copyShareLink(){
+  try{
+    await navigator.clipboard.writeText(shareLink());
+    alert('Đã sao chép link phòng!');
+  } catch(err){
+    prompt('Sao chép link phòng:', shareLink());
+  }
+}
+
 document.getElementById('btnRules').addEventListener('click', showRules);
 document.getElementById('closeRules').addEventListener('click', hideRules);
 document.getElementById('btnUndo').addEventListener('click', undo);
@@ -340,14 +446,35 @@ document.getElementById('btnNew').addEventListener('click', () => {
   if(confirm('Bắt đầu ván mới? Ván hiện tại sẽ mất.')) newGame();
 });
 document.getElementById('btnPlayAgain').addEventListener('click', newGame);
+document.getElementById('btnCopyLink').addEventListener('click', copyShareLink);
+document.getElementById('btnCopyLinkWaiting').addEventListener('click', copyShareLink);
 rulesOverlay.addEventListener('click', (e) => { if(e.target===rulesOverlay) hideRules(); });
 winOverlay.addEventListener('click', (e) => { if(e.target===winOverlay) return; });
 
 /* ============================================================
    BOOT
    ============================================================ */
-initBoard();
 buildLabels();
+
+// initial paint before the network has responded, so the page isn't blank
 render();
 
-})();
+channel.onUpdate((data) => {
+  shared = data;
+  mySeat = computeMySeat();
+  render();
+});
+
+// wait a tick for the identity/connection to be ready, then read the
+// current room state and try to claim a seat
+setTimeout(() => {
+  try{
+    myKey = playhtml.presence.getMyIdentity().publicKey;
+  } catch(err){
+    myKey = null;
+  }
+  shared = channel.getData();
+  mySeat = computeMySeat();
+  claimSeatIfNeeded();
+  render();
+}, 300);

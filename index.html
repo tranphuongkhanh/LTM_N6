@@ -33,9 +33,16 @@
 
   <header class="topbar">
     <h1>OTT<span class="sub">Đấm lá kéo · bàn cờ 9×9</span></h1>
-    <div class="turn-indicator">
-      <span class="turn-dot p1" id="turnDot"></span>
-      <span>Đang đi: <strong id="turnLabel">Đỏ</strong></span>
+    <div class="topbar-right">
+      <div class="room-bar">
+        <span class="room-code">Phòng: <strong id="roomCodeLabel">—</strong></span>
+        <button id="btnCopyLink" class="tiny">Sao chép link mời</button>
+      </div>
+      <div class="seat-badge" id="seatBadge">Đang kết nối…</div>
+      <div class="turn-indicator">
+        <span class="turn-dot p1" id="turnDot"></span>
+        <span>Đang đi: <strong id="turnLabel">Đỏ</strong></span>
+      </div>
     </div>
   </header>
 
@@ -99,6 +106,18 @@
   </div>
 </div>
 
+<!-- Waiting for opponent overlay -->
+<div class="modal-overlay" id="waitingOverlay">
+  <div class="modal win-modal">
+    <div class="win-icon">⏳</div>
+    <h2 id="waitingTitle">Đang chờ đối thủ…</h2>
+    <p id="waitingDesc">Gửi link phòng cho bạn bè để họ vào chơi cùng.</p>
+    <div class="controls" style="margin-top:10px;">
+      <button class="primary" id="btnCopyLinkWaiting">Sao chép link mời</button>
+    </div>
+  </div>
+</div>
+
 <!-- Win modal -->
 <div class="modal-overlay" id="winOverlay">
   <div class="modal win-modal">
@@ -111,6 +130,6 @@
   </div>
 </div>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 </body>
 </html>
