@@ -351,7 +351,7 @@ button.primary:hover{background:#d4ab6c;}
   color:var(--brass);
   margin-top:0;
 }
-.modal p, .modal li{font-size:14.5px; line-height:1.6; color:var(--ivory);}
+.modal p, .modal li{font-size:14.5px; line-height:1.6; color:#000;}
 .modal ul{padding-left:20px;}
 .win-modal{text-align:center;}
 .win-modal .win-icon{font-size:46px; margin-bottom:6px;}
