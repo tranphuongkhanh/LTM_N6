@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="UTF-8"><title>PlayHTML smoke test</title></head>
+<body>
+  <output id="result">Đang kết nối…</output>
+  <script type="module">
+    import { playhtml } from 'playhtml';
+
+    await playhtml.init({ room: 'ottv2-smoke-v1' });
+    const channel = playhtml.createPageData('ottv2-smoke-v1', { value: 0 });
+    channel.onUpdate((data) => {
+      document.getElementById('result').textContent = `Đồng bộ: ${data.value}`;
+    });
+  </script>
+</body>
+</html>

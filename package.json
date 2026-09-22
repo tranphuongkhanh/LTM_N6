@@ -1,0 +1,17 @@
+{
+  "name": "ottv2-online",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5173 --strictPort",
+    "build": "vite build",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playhtml": "2.14.1"
+  },
+  "devDependencies": {
+    "vite": "8.3.0"
+  }
+}

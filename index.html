@@ -50,6 +50,21 @@
     </section>
 
     <aside class="panel">
+      <div class="card room-card">
+        <h2>Phòng chơi</h2>
+        <div class="room-actions">
+          <button class="primary" id="btnCreateRoom">Tạo phòng</button>
+          <div class="room-join">
+            <input id="roomInput" type="text" maxlength="80" autocomplete="off" placeholder="Mã phòng" aria-label="Mã phòng">
+            <button id="btnJoinRoom">Vào phòng</button>
+          </div>
+          <button id="btnCopyLink" hidden>Sao chép link mời</button>
+        </div>
+        <p class="room-id" id="roomIdLabel" hidden></p>
+        <p class="room-role" id="roleLabel">Chế độ chơi cùng máy</p>
+        <p class="connection-status" id="connectionStatus" role="status" aria-live="polite">Sẵn sàng</p>
+      </div>
+
       <div class="card">
         <h2>Quân còn lại</h2>
         <div id="scoreboard"></div>
@@ -86,7 +101,7 @@
     <p><b>Điều kiện thắng</b> — thắng ngay khi:</p>
     <ul>
       <li>Ăn sạch hoàn toàn 1 loại quân bất kỳ của đối phương, hoặc</li>
-      <li>Đưa được quân của mình vào ô <b>a1</b> hoặc <b>i9</b> (ô có viền chấm gạch trên bàn).</li>
+      <li><b>Đỏ</b> đưa một quân vào <b>i9</b>; <b>Xanh</b> đưa một quân vào <b>a1</b> (ô có viền chấm gạch trên bàn).</li>
     </ul>
     <div class="legend">
       <span><svg><use href="#icon-bua"/></svg>Búa</span>
@@ -111,6 +126,6 @@
   </div>
 </div>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 </body>
 </html>
